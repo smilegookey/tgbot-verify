@@ -5,7 +5,7 @@ from functools import partial
 from telegram.ext import Application, CommandHandler
 
 from config import BOT_TOKEN
-from database import Database
+from database_mysql import Database
 from handlers.user_commands import (
     start_command,
     about_command,

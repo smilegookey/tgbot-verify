@@ -1,11 +1,17 @@
-"""Telegram 机器人主程序"""
 import logging
-from functools import partial
-
-from telegram.ext import Application, CommandHandler
+import asyncio
+from telegram import Update
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ContextTypes,
+    Defaults,
+)
+from telegram.constants import ParseMode
 
 from config import BOT_TOKEN
-from database_mysql import Database
+# 【修复1】这里原来是 from database import ... 改正为 database_mysql
+from database_mysql import Database 
 from handlers.user_commands import (
     start_command,
     about_command,
@@ -18,7 +24,7 @@ from handlers.user_commands import (
 from handlers.verify_commands import (
     verify_command,
     verify2_command,
-    verify3_command,
+    # 【修复2】删除了 verify3_command，因为它不存在
     verify4_command,
     getV4Code_command,
 )
@@ -34,61 +40,55 @@ from handlers.admin_commands import (
 
 # 配置日志
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", 
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
 
-
-async def error_handler(update: object, context) -> None:
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """全局错误处理"""
-    logger.exception("处理更新时发生异常: %s", context.error, exc_info=context.error)
+    logger.error(f"Exception while handling an update: {context.error}")
 
-
-def main():
-    """主函数"""
+def main() -> None:
+    """启动机器人"""
     # 初始化数据库
     db = Database()
-
-    # 创建应用 - 启用并发处理
-    application = (
-        Application.builder()
-        .token(BOT_TOKEN)
-        .concurrent_updates(True)  # 🔥 关键：启用并发处理多个命令
-        .build()
-    )
-
-    # 注册用户命令（使用 partial 传递 db 参数）
-    application.add_handler(CommandHandler("start", partial(start_command, db=db)))
-    application.add_handler(CommandHandler("about", partial(about_command, db=db)))
-    application.add_handler(CommandHandler("help", partial(help_command, db=db)))
-    application.add_handler(CommandHandler("balance", partial(balance_command, db=db)))
-    application.add_handler(CommandHandler("qd", partial(checkin_command, db=db)))
-    application.add_handler(CommandHandler("invite", partial(invite_command, db=db)))
-    application.add_handler(CommandHandler("use", partial(use_command, db=db)))
-
-    # 注册验证命令
-    application.add_handler(CommandHandler("verify", partial(verify_command, db=db)))
-    application.add_handler(CommandHandler("verify2", partial(verify2_command, db=db)))
-    application.add_handler(CommandHandler("verify3", partial(verify3_command, db=db)))
-    application.add_handler(CommandHandler("verify4", partial(verify4_command, db=db)))
-    application.add_handler(CommandHandler("getV4Code", partial(getV4Code_command, db=db)))
-
-    # 注册管理员命令
-    application.add_handler(CommandHandler("addbalance", partial(addbalance_command, db=db)))
-    application.add_handler(CommandHandler("block", partial(block_command, db=db)))
-    application.add_handler(CommandHandler("white", partial(white_command, db=db)))
-    application.add_handler(CommandHandler("blacklist", partial(blacklist_command, db=db)))
-    application.add_handler(CommandHandler("genkey", partial(genkey_command, db=db)))
-    application.add_handler(CommandHandler("listkeys", partial(listkeys_command, db=db)))
-    application.add_handler(CommandHandler("broadcast", partial(broadcast_command, db=db)))
+    
+    # 创建应用
+    defaults = Defaults(parse_mode=ParseMode.HTML)
+    application = Application.builder().token(BOT_TOKEN).defaults(defaults).build()
 
     # 注册错误处理器
     application.add_error_handler(error_handler)
 
-    logger.info("机器人启动中...")
-    application.run_polling(drop_pending_updates=True)
+    # --- 注册用户命令 ---
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("about", about_command))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("balance", balance_command))
+    application.add_handler(CommandHandler("qd", checkin_command))     # 签到
+    application.add_handler(CommandHandler("invite", invite_command))  # 邀请
+    application.add_handler(CommandHandler("use", use_command))        # 使用卡密
 
+    # --- 注册验证命令 ---
+    application.add_handler(CommandHandler("verify", verify_command))   # Gemini
+    application.add_handler(CommandHandler("verify2", verify2_command)) # K12
+    # 【修复2】verify3 已被删除，这里不要注册
+    application.add_handler(CommandHandler("verify4", verify4_command)) # Bolt
+    application.add_handler(CommandHandler("getV4Code", getV4Code_command))
+
+    # --- 注册管理员命令 ---
+    application.add_handler(CommandHandler("addbalance", addbalance_command))
+    application.add_handler(CommandHandler("block", block_command))
+    application.add_handler(CommandHandler("white", white_command))
+    application.add_handler(CommandHandler("blacklist", blacklist_command))
+    application.add_handler(CommandHandler("genkey", genkey_command))
+    application.add_handler(CommandHandler("listkeys", listkeys_command))
+    application.add_handler(CommandHandler("broadcast", broadcast_command))
+
+    # 启动
+    logger.info("Bot started polling...")
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
     main()
